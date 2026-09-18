@@ -1,0 +1,34 @@
+# VeriTrack Stage 1 — Edge Vision & Feature Extraction Pipeline
+#
+# Install profile depends on the edge SoC. See README.md ("Deployment profiles").
+#
+# ---------------------------------------------------------------------------
+# Core (mandatory on every node)
+# ---------------------------------------------------------------------------
+numpy>=1.26,<3.0
+opencv-python-headless>=4.9,<5.0
+
+# ---------------------------------------------------------------------------
+# Inference backend — install EXACTLY ONE of the following
+# ---------------------------------------------------------------------------
+# Jetson Orin Nano / x86 dev workstation (CUDA or CPU EP):
+onnxruntime>=1.17,<2.0
+# onnxruntime-gpu>=1.17,<2.0        # Jetson: use the NVIDIA-built JetPack wheel
+#
+# Rockchip RK3588 NPU: rknn-toolkit-lite2 is NOT on PyPI. Install the vendor
+# wheel matching the on-device librknnrt.so, e.g.
+#   pip install rknn_toolkit_lite2-2.3.0-cp312-cp312-linux_aarch64.whl
+# veritrack_edge.runtime.RknnLiteBackend imports it lazily, so a node that
+# only ever loads ONNX models never needs it present.
+
+# ---------------------------------------------------------------------------
+# Optional — graceful degradation if absent
+# ---------------------------------------------------------------------------
+# scipy: exact Jenkins-Hungarian assignment in ByteTrack. Without it,
+# tracking.linear_assignment falls back to a greedy matcher (slightly worse
+# identity retention under dense occlusion, no crash).
+scipy>=1.11,<2.0
+
+# confluent-kafka: the KafkaSink in run_node.py. Without it, --sink kafka
+# raises at startup and --sink stdout still works for bench/replay.
+confluent-kafka>=2.3,<3.0

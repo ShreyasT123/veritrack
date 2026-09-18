@@ -1,0 +1,53 @@
+# VeriTrack laptop demo — live webcam ANPR, CPU-only (no GPU required)
+#
+# Target: Intel i5 13th-gen, Windows 11 native Python (recommended) or WSL2
+# Ubuntu with a USB camera attached via usbipd-win. See README.md
+# ("Stage 1 laptop demo") for the Windows/WSL2/Docker decision and why the
+# camera capture step specifically should run natively on Windows.
+#
+# Install with the SAME Python environment you will run the demo from:
+#   python -m venv .venv
+#   .venv\Scripts\activate            (Windows)  or  source .venv/bin/activate (WSL2)
+#   pip install -r requirements-demo.txt
+
+# ---------------------------------------------------------------------------
+# PyTorch — CPU build. The default PyPI index resolves a much larger CUDA
+# build even on a machine with no GPU; the dedicated CPU index avoids that
+# multi-GB download entirely. If this index is unreachable from your network,
+# omit --extra-index-url and let pip's default CPU fallback resolve instead.
+# ---------------------------------------------------------------------------
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.2,<3.0
+
+# ---------------------------------------------------------------------------
+# Model + inference
+# ---------------------------------------------------------------------------
+transformers>=4.45          # AutoImageProcessor / AutoModelForTextRecognition
+safetensors>=0.4            # the model repo ships *_safetensors weights
+huggingface_hub>=0.25       # also provides the `huggingface-cli download` command
+accelerate>=0.30            # transformers uses this for .to(device) device placement
+
+# ---------------------------------------------------------------------------
+# Capture, geometry, and image I/O
+# ---------------------------------------------------------------------------
+opencv-python>=4.9,<5.0     # NOT opencv-python-headless: this build includes
+                            # highgui (cv2.imshow) for the live preview window
+Pillow>=10.0
+numpy>=1.26,<3.0
+
+# ---------------------------------------------------------------------------
+# Convenience
+# ---------------------------------------------------------------------------
+python-dotenv>=1.0          # matches the validated laptop script's env loading
+
+# ---------------------------------------------------------------------------
+# Test
+# ---------------------------------------------------------------------------
+pytest>=8.0
+
+# ---------------------------------------------------------------------------
+# Reused from earlier stages — the demo imports veritrack_edge (rectify,
+# validation, gating) and, only for the optional Stage 2 forwarding test,
+# veritrack_server's schema. Install alongside this file, not instead of it:
+#   pip install -r requirements.txt -r requirements-demo.txt
+# ---------------------------------------------------------------------------

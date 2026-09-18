@@ -1,0 +1,43 @@
+# VeriTrack Stage 2 -- Central Ingestion, Storage & Hotlist Matcher
+#
+# Server-side only. The edge node has its own, deliberately minimal pin set in
+# requirements.txt -- do not install this on an RK3588/Orin pole device.
+
+# ---------------------------------------------------------------------------
+# Core service
+# ---------------------------------------------------------------------------
+fastapi>=0.110,<1.0
+pydantic>=2.6,<3.0
+pydantic-settings>=2.2,<3.0
+uvicorn[standard]>=0.29,<1.0
+
+# ---------------------------------------------------------------------------
+# Storage and cache
+# ---------------------------------------------------------------------------
+asyncpg>=0.29,<1.0          # TimescaleDB / PostGIS, binary COPY path
+redis>=5.0,<9.0             # hotlist Bloom bitset + case metadata hashes
+
+# ---------------------------------------------------------------------------
+# Cryptography (DPDP Act 2023)
+# ---------------------------------------------------------------------------
+cryptography>=42.0          # AES-256-GCM, HKDF-SHA256
+
+# ---------------------------------------------------------------------------
+# Observability
+# ---------------------------------------------------------------------------
+prometheus-client>=0.20,<1.0
+
+# ---------------------------------------------------------------------------
+# Optional -- graceful degradation if absent
+# ---------------------------------------------------------------------------
+# aiokafka: the downstream event bus. Without it the EventDispatcher falls back
+# to an in-process sink, which is correct for CI and single-box demos.
+aiokafka>=0.10,<1.0
+
+# ---------------------------------------------------------------------------
+# Test and development
+# ---------------------------------------------------------------------------
+pytest>=8.0
+pytest-asyncio>=0.23
+httpx>=0.27                 # ASGITransport drives the real app in tests
+pglast>=6.0                 # parse-checks init_schema.sql against the PG grammar

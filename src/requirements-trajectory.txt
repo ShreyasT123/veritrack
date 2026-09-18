@@ -1,0 +1,27 @@
+# VeriTrack Stage 3 -- Spatio-Temporal Trajectory Reconstruction & Anomaly Engine
+#
+# Analytics-tier dependencies. Not installed on an edge pole device.
+
+# ---------------------------------------------------------------------------
+# Core
+# ---------------------------------------------------------------------------
+networkx>=3.1,<4.0          # directed road multigraph, A* path expansion
+
+# ---------------------------------------------------------------------------
+# Optional -- graceful degradation if absent
+# ---------------------------------------------------------------------------
+# scipy: cKDTree backs both candidate pruning and nearest-node resolution.
+# Without it both fall back to an exact linear scan -- same answers, but
+# nearest_node measured ~23x slower on a 1600-node graph, which dominates
+# reconstruction wall clock. Treat it as required in production.
+scipy>=1.11,<2.0
+
+# osmnx: real OpenStreetMap extracts. RoadNetworkGraph.from_osm_like() consumes
+# the node/edge record shape an osmnx or Overpass export reduces to, so this is
+# only needed by the loader that produces those records, not by the engine.
+# osmnx>=1.9,<3.0
+
+# ---------------------------------------------------------------------------
+# Test
+# ---------------------------------------------------------------------------
+pytest>=8.0

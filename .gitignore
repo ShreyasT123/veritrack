@@ -1,0 +1,138 @@
+# =========================
+# Python
+# =========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# =========================
+# Virtual environments
+# =========================
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# =========================
+# Python packaging
+# =========================
+build/
+dist/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+wheels/
+
+# =========================
+# Environment / secrets
+# =========================
+.env
+.env.*
+!.env.example
+
+# =========================
+# Jupyter
+# =========================
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# =========================
+# AI / ML datasets
+# =========================
+data/
+datasets/
+*.csv
+*.tsv
+*.parquet
+*.feather
+*.h5
+*.hdf5
+*.npz
+*.npy
+
+# =========================
+# ML models / checkpoints
+# =========================
+models/
+checkpoints/
+artifacts/
+outputs/
+runs/
+wandb/
+mlruns/
+
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.safetensors
+*.pkl
+*.joblib
+
+# =========================
+# TensorBoard
+# =========================
+.tensorboard/
+logs/
+
+# =========================
+# Hugging Face cache
+# =========================
+.cache/
+huggingface/
+.huggingface/
+
+# =========================
+# Experiment tracking
+# =========================
+wandb/
+comet_ml/
+neptune/
+
+# =========================
+# IDEs / editors
+# =========================
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# =========================
+# OS
+# =========================
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# =========================
+# Testing / coverage
+# =========================
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# =========================
+# Type checking / linting
+# =========================
+.mypy_cache/
+.pyre/
+.ruff_cache/
+
+# =========================
+# Logs
+# =========================
+*.log
+
+# =========================
+# Temporary files
+# =========================
+*.tmp
+*.temp
+*.bak
+*.orig

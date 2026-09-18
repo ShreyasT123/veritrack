@@ -1,0 +1,101 @@
+# VeriTrack Stage 2 backend, for demoing the full loop:
+#   webcam (native Windows, see requirements-demo.txt) -> http://localhost:8080
+#
+# The webcam/recognizer step is deliberately NOT in this file — Docker Desktop
+# on Windows cannot pass a USB webcam through to a Linux container without
+# fragile workarounds. Everything here is a pure network service, which is
+# exactly what Docker on Windows *is* good at. See README.md
+# ("Stage 1 laptop demo" -> "Where each piece should run") for the full
+# reasoning.
+#
+# Quick start:
+#   cp .env.example .env      # then fill in real values, see that file
+#   docker compose up --build
+#   curl http://localhost:8080/healthz
+#
+# The gateway waits on Postgres' healthcheck, and init_schema.sql runs
+# automatically on the *first* boot of an empty ./pgdata volume (Postgres'
+# entrypoint only executes docker-entrypoint-initdb.d/ scripts against a
+# brand-new data directory). Delete the volume to re-run it from scratch.
+
+services:
+  timescaledb:
+    # Bundles PostGIS alongside TimescaleDB in one image, matching what
+    # init_schema.sql's `CREATE EXTENSION timescaledb` / `postgis` expect.
+    # If this tag is unavailable, any current timescaledb-ha:pgXX tag works —
+    # check https://hub.docker.com/r/timescale/timescaledb-ha/tags
+    image: timescale/timescaledb-ha:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${VERITRACK_DB_USER:-veritrack}
+      POSTGRES_PASSWORD: ${VERITRACK_DB_PASSWORD:-veritrack}
+      POSTGRES_DB: ${VERITRACK_DB_DATABASE:-veritrack}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/home/postgres/pgdata/data
+      - ./veritrack_server/sql/init_schema.sql:/docker-entrypoint-initdb.d/01-init_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${VERITRACK_DB_USER:-veritrack} -d ${VERITRACK_DB_DATABASE:-veritrack}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.gateway
+    restart: unless-stopped
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      VERITRACK_ENVIRONMENT: dev
+      VERITRACK_LOG_LEVEL: INFO
+
+      VERITRACK_DB_HOST: timescaledb
+      VERITRACK_DB_PORT: "5432"
+      VERITRACK_DB_USER: ${VERITRACK_DB_USER:-veritrack}
+      VERITRACK_DB_PASSWORD: ${VERITRACK_DB_PASSWORD:-veritrack}
+      VERITRACK_DB_DATABASE: ${VERITRACK_DB_DATABASE:-veritrack}
+
+      VERITRACK_REDIS_HOST: redis
+      VERITRACK_REDIS_PORT: "6379"
+      VERITRACK_REDIS_REQUIRED: "true"
+
+      # Real key material from .env if present; otherwise the insecure-default
+      # escape hatch so the compose file still boots for a quick demo.
+      # NEVER set ALLOW_INSECURE_DEFAULTS=true outside a local demo.
+      VERITRACK_CRYPTO_AES_MASTER_KEY: ${VERITRACK_CRYPTO_AES_MASTER_KEY:-}
+      VERITRACK_CRYPTO_SALT_PEPPER: ${VERITRACK_CRYPTO_SALT_PEPPER:-}
+      VERITRACK_CRYPTO_ALLOW_INSECURE_DEFAULTS: ${VERITRACK_CRYPTO_ALLOW_INSECURE_DEFAULTS:-true}
+
+      VERITRACK_SERVER_HOST: 0.0.0.0
+      VERITRACK_SERVER_PORT: "8080"
+      VERITRACK_SERVER_RATE_LIMIT_ENABLED: "true"
+      VERITRACK_SERVER_ENABLE_DOCS: "true"
+      # Leave unset to accept any bearer token (dev only). Set to require one:
+      # VERITRACK_SERVER_INGEST_API_KEY: some-shared-demo-token
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=2)"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
