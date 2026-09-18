@@ -1,0 +1,37 @@
+{
+  "compilerOptions": {
+    // Environment setup & latest features
+    "lib": ["ESNext", "DOM"],
+    "target": "ESNext",
+    "module": "Preserve",
+    "moduleDetection": "force",
+    "jsx": "react-jsx",
+    "allowJs": false,
+    "types": ["react"],
+
+    // Bundler mode
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": false,
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+
+    // Best practices
+    "strict": true,
+    "skipLibCheck": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "noImplicitOverride": true,
+
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+
+    // Some stricter flags (disabled by default)
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "noPropertyAccessFromIndexSignature": false
+  },
+
+  "include": ["src/main.tsx", "src/App.tsx", "src/types/**/*.ts", "src/data/**/*.ts", "src/services/**/*.ts", "src/components/TopNav.tsx", "src/components/SightingTicker.tsx", "src/components/VehicleSearch.tsx", "src/components/MapView.tsx", "src/components/AlertPanel.tsx", "src/components/CorridorSummary.tsx"],
+  "exclude": ["dist", "node_modules"]
+}

@@ -45,6 +45,7 @@ from typing import Any, AsyncIterator, Dict, List, Optional, Sequence, Tuple, Un
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import ValidationError
 
 from .bloom import (
@@ -56,6 +57,7 @@ from .bloom import (
     bloom_parameters,
 )
 from .config import Settings, get_settings
+from .api_routes import UnifiedApiState, router as command_console_router
 from .crypto import DpdpCryptoPipeline
 from .db import (
     BackpressureError,
@@ -758,6 +760,7 @@ def create_app(
             metrics=Metrics(),
             redis_client=redis_client,
         )
+        application.state.stage5 = UnifiedApiState()
         try:
             yield
         finally:
@@ -792,6 +795,8 @@ def create_app(
             allow_methods=["GET", "POST"],
             allow_headers=["*"],
         )
+
+    application.include_router(command_console_router)
 
     @application.middleware("http")
     async def _request_context(request: Request, call_next: Any) -> Response:
@@ -1053,6 +1058,8 @@ def create_app(
         """Force a COPY flush. Used by drain-before-deploy automation."""
         return {"rows_flushed": await state.database.flush()}
 
+    static_dir = os.path.join(os.path.dirname(__file__), "static")
+    application.mount("/", StaticFiles(directory=static_dir, html=True), name="command-console")
     return application
 
 
