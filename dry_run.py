@@ -37,6 +37,10 @@ def parse_args() -> argparse.Namespace:
         "--localizer", choices=("manual", "haar", "contour", "auto"), default="manual",
         help="plate localization strategy (default: manual central ROI)",
     )
+    parser.add_argument(
+        "--output", type=Path, default=ROOT / "dry_run_output.png",
+        help="annotated image output path (default: dry_run_output.png)",
+    )
     return parser.parse_args()
 
 
@@ -104,6 +108,15 @@ def main() -> int:
     print(f"[3/3] Loading PP-OCRv6-Tiny on CPU and recognizing {crop.shape[1]}x{crop.shape[0]} crop...", flush=True)
     recognizer = PPOcrRecognizer(resolve_model_source(), device="cpu", warmup_on_load=False)
     result = recognizer.recognize(crop)
+    x1, y1, x2, y2 = candidate.as_int_box()
+    cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 200, 0), 3)
+    label = f"{result.text or '?'}  {result.confidence * 100:.1f}%"
+    label_y = max(28, y1 - 10)
+    cv2.putText(frame, label, (x1, label_y), cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 200, 0), 2, cv2.LINE_AA)
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    if not cv2.imwrite(str(args.output), frame):
+        raise RuntimeError(f"could not write annotated image: {args.output}")
+    print(f"Annotated image saved to: {args.output}", flush=True)
     telemetry = {
         "schema": "veritrack.edge.telemetry.v1",
         "event_type": "plate_read",
