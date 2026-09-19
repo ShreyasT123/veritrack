@@ -6,3 +6,4 @@ export interface GeoJSONFeature { type: "Feature"; geometry: { type: "Point" | "
 export interface Trajectory { type: "FeatureCollection"; features: GeoJSONFeature[]; waypoints: Waypoint[]; route: [number, number][]; plate: string; }
 export interface CapAlert { identifier: string; sender: string; sent: string; status: "Actual" | "Exercise"; msgType: "Alert"; scope: "Restricted"; info: Array<{ category: string[]; event: string; urgency: string; severity: string; certainty: string; headline: string; description: string; area: Array<{ areaDesc: string; polygon: string }>; }>; }
 export interface AlertRecord { identifier: string; event: string; plate: string; active: boolean; cap: CapAlert; implied_speed_kph: number; case_reference: string; }
+export interface DatabaseRecord { timestamp: string; node_id: string; plate: string; confidence: number; dpdp_hash: string; bbox: [number, number, number, number]; vehicle_class: string; source: string; camera_id: string; }

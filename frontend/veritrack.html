@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Veritrack — Traffic Command Centre</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..600&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ============================================================
+   TOKENS
+   White shades carry the interface. Blue marks anything selected
+   or traced. Red marks anything that needs a decision. Amber and
+   green appear only on the congestion scale, where officers
+   already read them by convention.
+   ============================================================ */
+:root{
+  color-scheme:light;
+
+  --bg:#EAECEE;
+  --panel:#FCFDFE;
+  --panel-2:#F4F6F9;
+  --panel-3:#F0F4F8;
+
+  --line:#D5DBE3;
+  --line-2:#E3E7EC;
+
+  --ink:#111822;
+  --ink-2:#37455A;
+  --muted:#64738A;
+  --faint:#95A1B2;
+
+  --blue:#0464FF;
+  --blue-dk:#0449BF;
+  --blue-wash:#E5EEFF;
+  --blue-edge:#B9D2FF;
+
+  --red:#FF073A;
+  --red-dk:#C80430;
+  --red-wash:#FFE9ED;
+  --red-edge:#FFC2CE;
+
+  --amber:#B87709;
+  --amber-wash:#FAF0DE;
+  --green:#0B8B4C;
+  --green-wash:#E3F2E9;
+
+  --road:#D3DAE3;
+  --road-edge:#E6EAF0;
+  --land:#F1F4F8;
+
+  --r:3px;
+}
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+
+body{
+  background:var(--bg);
+  color:var(--ink);
+  font-family:'Hanken Grotesk','Segoe UI',system-ui,-apple-system,sans-serif;
+  font-size:14px;
+  line-height:1.5;
+  font-variant-numeric:tabular-nums;
+  -webkit-font-smoothing:antialiased;
+  height:100vh;
+  overflow:hidden;
+}
+
+h1,h2,h3{font-weight:600;line-height:1.2}
+button,input{font:inherit;color:inherit}
+button{background:none;border:none;cursor:pointer}
+:focus-visible{outline:2px solid var(--blue);outline-offset:1px}
+::selection{background:var(--blue-wash);color:var(--blue-dk)}
+
+.serif{font-family:'Fraunces','Iowan Old Style',Georgia,serif;font-optical-sizing:auto}
+
+.scroll{overflow-y:auto;min-height:0;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+.scroll::-webkit-scrollbar{width:9px;height:9px}
+.scroll::-webkit-scrollbar-thumb{background:var(--line);border:3px solid var(--panel);border-radius:6px}
+.scroll::-webkit-scrollbar-thumb:hover{background:var(--faint)}
+.scroll::-webkit-scrollbar-track{background:transparent}
+
+/* ============================================================
+   SHELL — one viewport. Nothing outside a panel scrolls, so the
+   map never leaves the screen while a list is being read.
+   ============================================================ */
+.shell{display:grid;grid-template-columns:226px minmax(0,1fr);height:100vh;overflow:hidden}
+
+.rail{display:flex;flex-direction:column;background:var(--panel-2);
+  border-right:1px solid var(--line);overflow:hidden}
+.rail-top{padding:18px 18px 16px;border-bottom:1px solid var(--line)}
+.mark{font-family:'Fraunces',Georgia,serif;font-size:22px;font-weight:600;letter-spacing:-.02em}
+.mark span{color:var(--blue)}
+.mark-sub{margin-top:2px;font-size:11.5px;color:var(--muted);line-height:1.35}
+
+.rail nav{padding:10px 0;flex:1;min-height:0;overflow-y:auto}
+.nav-label{padding:8px 18px 6px;font-size:11px;font-weight:600;color:var(--faint);letter-spacing:.04em}
+.rail nav button{position:relative;width:100%;text-align:left;
+  display:flex;align-items:center;justify-content:space-between;gap:8px;
+  padding:8px 18px 8px 17px;border-left:3px solid transparent;
+  font-size:13.5px;color:var(--ink-2)}
+.rail nav button:hover{background:var(--panel-3);color:var(--ink)}
+.rail nav button[aria-current="true"]{background:var(--panel);border-left-color:var(--blue);
+  color:var(--blue-dk);font-weight:600}
+.pip{min-width:18px;padding:1px 5px;border-radius:2px;background:var(--red);
+  color:#fff;font-size:11px;font-weight:700;text-align:center}
+
+.rail-foot{border-top:1px solid var(--line);padding:13px 18px}
+.who{font-size:12.5px;font-weight:600;color:var(--ink)}
+.who small{display:block;font-size:11.5px;font-weight:400;color:var(--muted);margin-top:1px}
+
+/* ============================================================
+   STAGE
+   ============================================================ */
+.stage{display:flex;flex-direction:column;height:100vh;overflow:hidden;background:var(--bg)}
+
+.strip{flex:none;display:flex;align-items:stretch;flex-wrap:wrap;
+  background:var(--panel);border-bottom:1px solid var(--line)}
+.strip .cell{display:flex;align-items:center;gap:8px;padding:9px 18px;
+  font-size:13px;color:var(--ink-2);border-right:1px solid var(--line-2);white-space:nowrap}
+.strip .cell b{font-weight:600;color:var(--ink)}
+.strip .cell.flag b{color:var(--red-dk)}
+.strip .spacer{flex:1;border-right:none}
+.strip .cell.time{border-right:none;border-left:1px solid var(--line-2)}
+.led{width:7px;height:7px;border-radius:50%;background:var(--green);flex:none}
+.led.red{background:var(--red)}
+
+.view{flex:1;min-height:0;display:none;flex-direction:column;overflow:hidden}
+.view.on{display:flex}
+
+.head{flex:none;padding:15px 20px 12px;border-bottom:1px solid var(--line)}
+.head h1{font-family:'Fraunces',Georgia,serif;font-size:23px;font-weight:600;letter-spacing:-.018em}
+.head p{margin-top:2px;font-size:13px;color:var(--muted);max-width:86ch}
+
+.body{flex:1;min-height:0;padding:14px;display:grid;gap:14px;overflow:hidden}
+
+/* ============================================================
+   PANELS — square, bordered, no soft shadow
+   ============================================================ */
+.panel{display:flex;flex-direction:column;min-height:0;background:var(--panel);
+  border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.panel-head{flex:none;display:flex;align-items:center;justify-content:space-between;gap:14px;
+  padding:9px 14px;background:var(--panel-2);border-bottom:1px solid var(--line)}
+.panel-head h2{font-size:13px;font-weight:600}
+.panel-head .note{font-size:12px;color:var(--muted);white-space:nowrap}
+
+.bar{flex:none;display:flex;flex-wrap:wrap;align-items:center;
+  border-top:1px solid var(--line);background:var(--panel-2)}
+.bar span{padding:8px 14px;font-size:12.5px;color:var(--ink-2);border-right:1px solid var(--line-2)}
+.bar span:last-child{border-right:none}
+.bar b{font-weight:600;color:var(--ink)}
+
+/* ============================================================
+   CONTROLS
+   ============================================================ */
+.btn{padding:7px 14px;border-radius:2px;border:1px solid var(--blue);
+  background:var(--blue);color:#fff;font-size:13px;font-weight:600}
+.btn:hover{background:var(--blue-dk);border-color:var(--blue-dk)}
+.btn.ghost{background:var(--panel);border-color:var(--line);color:var(--ink-2);font-weight:500}
+.btn.ghost:hover{background:var(--panel-3);color:var(--ink);border-color:var(--faint)}
+.btn.danger{background:var(--red);border-color:var(--red)}
+.btn.danger:hover{background:var(--red-dk);border-color:var(--red-dk)}
+
+.search{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.field{display:flex;align-items:center;gap:10px;background:var(--panel);
+  border:1px solid var(--line);border-radius:2px;padding:0 12px;height:34px;flex:0 1 300px}
+.field:focus-within{border-color:var(--blue);box-shadow:inset 0 0 0 1px var(--blue)}
+.field label{font-size:12px;color:var(--muted);white-space:nowrap;
+  border-right:1px solid var(--line-2);padding-right:10px}
+.field input{flex:1;min-width:0;border:none;background:none;outline:none;
+  font-size:14.5px;font-weight:600;letter-spacing:.08em}
+.field input::placeholder{font-weight:400;color:var(--faint);letter-spacing:.02em}
+
+.chip{padding:6px 12px;border-radius:2px;font-size:12.5px;
+  border:1px solid var(--line);background:var(--panel);color:var(--ink-2)}
+.chip:hover{background:var(--panel-3)}
+.chip[aria-pressed="true"]{background:var(--blue-wash);border-color:var(--blue-edge);
+  color:var(--blue-dk);font-weight:600}
+
+/* ============================================================
+   TRACE
+   ============================================================ */
+#view-trace .body{grid-template-columns:minmax(0,1fr) 336px;grid-template-rows:auto minmax(0,1fr)}
+.trace-controls{grid-column:1 / -1;display:flex;align-items:center;justify-content:space-between;
+  gap:14px;flex-wrap:wrap}
+.trace-controls .hint{font-size:12px;color:var(--muted)}
+.map-panel{grid-column:1;min-height:0}
+.map-hold{flex:1;min-height:0;background:var(--land);display:flex}
+.map-hold svg{width:100%;height:100%;display:block}
+.side{grid-column:2;min-height:0}
+
+.vhead{flex:none;padding:12px 14px;border-bottom:1px solid var(--line);background:var(--panel)}
+.plate{display:inline-block;padding:5px 10px;border-radius:2px;background:var(--panel-2);
+  border:1px solid var(--line);border-left:3px solid var(--blue);
+  font-size:16px;font-weight:700;letter-spacing:.1em}
+.vmeta{margin-top:8px;font-size:12.5px;color:var(--ink-2)}
+.vmeta em{font-style:normal;color:var(--muted)}
+.flagline{margin-top:10px;padding:8px 10px;background:var(--red-wash);
+  border:1px solid var(--red-edge);border-left:3px solid var(--red);border-radius:2px;
+  font-size:12.5px;color:var(--red-dk);line-height:1.45}
+
+.stop{display:grid;grid-template-columns:26px minmax(0,1fr) auto;gap:2px 10px;
+  padding:11px 14px;border-bottom:1px solid var(--line-2)}
+.stop:hover{background:var(--panel-3)}
+.stop-n{grid-row:1 / span 3;width:22px;height:22px;border-radius:2px;margin-top:1px;
+  display:grid;place-items:center;font-size:11.5px;font-weight:700;
+  background:var(--blue-wash);color:var(--blue-dk);border:1px solid var(--blue-edge)}
+.stop:first-child .stop-n,.stop:last-child .stop-n{background:var(--blue);color:#fff;border-color:var(--blue)}
+.stop-where{font-size:13.5px;font-weight:600}
+.stop-time{font-size:12.5px;color:var(--muted);white-space:nowrap;font-weight:500}
+.stop-what{grid-column:2 / span 2;font-size:12.5px;color:var(--ink-2)}
+.stop-speed{grid-column:2 / span 2;font-size:12px;color:var(--muted);margin-top:3px}
+.stop-speed b{font-weight:600;color:var(--ink-2)}
+.stop-speed.slow b{color:var(--red-dk)}
+
+.empty{padding:40px 20px;text-align:center}
+.empty h3{font-family:'Fraunces',Georgia,serif;font-size:17px;font-weight:600;margin-bottom:5px}
+.empty p{font-size:12.5px;color:var(--muted);max-width:36ch;margin:0 auto;line-height:1.55}
+
+/* ============================================================
+   CAMERAS
+   ============================================================ */
+#view-cameras .body{grid-template-columns:262px minmax(0,1fr) 320px}
+.cam-row{width:100%;display:flex;align-items:center;gap:10px;text-align:left;
+  padding:9px 14px;border-bottom:1px solid var(--line-2);border-left:3px solid transparent}
+.cam-row:hover{background:var(--panel-3)}
+.cam-row[aria-current="true"]{background:var(--blue-wash);border-left-color:var(--blue)}
+.cam-row .nm{font-size:13px;font-weight:600;display:block}
+.cam-row .rd{font-size:11.5px;color:var(--muted)}
+.cam-row[aria-current="true"] .nm{color:var(--blue-dk)}
+.cam-row .cnt{margin-left:auto;font-size:11.5px;color:var(--muted);font-weight:600;white-space:nowrap}
+
+.viewer{flex:1;min-height:0;background:#1B1F26;display:flex}
+.viewer svg{width:100%;height:100%;display:block}
+
+.read{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 10px;
+  padding:10px 14px;border-bottom:1px solid var(--line-2)}
+.read:hover{background:var(--panel-3)}
+.read .p{font-size:14px;font-weight:700;letter-spacing:.08em}
+.read .p.hot{color:var(--red-dk)}
+.read .d{grid-column:1;font-size:12.5px;color:var(--ink-2)}
+.read .m{grid-column:1;font-size:11.5px;color:var(--muted)}
+.read .q{grid-row:1 / span 3;align-self:start;text-align:right}
+.read .q span{display:block;font-size:11.5px;font-weight:600}
+.bars{display:flex;gap:2px;justify-content:flex-end;margin-top:4px}
+.bars i{width:11px;height:3px;background:var(--line);display:block}
+.q.good span{color:var(--green)} .bars.good i:nth-child(-n+3){background:var(--green)}
+.q.fair span{color:var(--amber)} .bars.fair i:nth-child(-n+2){background:var(--amber)}
+.q.poor span{color:var(--red-dk)} .bars.poor i:nth-child(1){background:var(--red)}
+
+/* ============================================================
+   TRAFFIC
+   ============================================================ */
+#view-traffic .body{grid-template-columns:minmax(0,1fr) 340px}
+.traffic-left{display:grid;grid-template-rows:minmax(0,1fr) auto;gap:14px;min-height:0}
+.traffic-right{display:grid;grid-template-rows:minmax(0,1.15fr) minmax(0,1fr);gap:14px;min-height:0}
+
+.legend{display:flex;flex-wrap:wrap;align-items:center;border-top:1px solid var(--line);
+  background:var(--panel-2)}
+.legend span{display:flex;align-items:center;gap:7px;padding:8px 14px;font-size:12.5px;
+  color:var(--ink-2);border-right:1px solid var(--line-2)}
+.legend span:last-child{border-right:none;color:var(--muted)}
+.legend i{width:14px;height:3px;display:block}
+
+.road-row{padding:10px 14px;border-bottom:1px solid var(--line-2)}
+.road-row:hover{background:var(--panel-3)}
+.road-row .top{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.road-row .nm{font-size:13px;font-weight:600}
+.road-row .st{font-size:11.5px;font-weight:700;white-space:nowrap;padding:1px 6px;border-radius:2px}
+.st.free{color:var(--green);background:var(--green-wash)}
+.st.slow{color:var(--amber);background:var(--amber-wash)}
+.st.heavy{color:var(--red-dk);background:var(--red-wash)}
+.track{height:4px;background:var(--line-2);margin:8px 0 6px}
+.track i{display:block;height:100%}
+.track i.free{background:var(--green)} .track i.slow{background:var(--amber)} .track i.heavy{background:var(--red)}
+.road-row .sp{font-size:12px;color:var(--muted)}
+.road-row .sp b{font-weight:700;color:var(--ink);font-size:13px}
+
+.busy{display:grid;grid-template-columns:18px minmax(0,1fr) auto;gap:10px;align-items:center;
+  padding:9px 14px;border-bottom:1px solid var(--line-2)}
+.busy:hover{background:var(--panel-3)}
+.busy .rank{font-family:'Fraunces',Georgia,serif;font-size:15px;color:var(--faint)}
+.busy .nm{font-size:13px;font-weight:500}
+.busy .nm small{display:block;font-size:11.5px;color:var(--muted)}
+.busy .ct{font-size:13px;font-weight:700;white-space:nowrap;text-align:right}
+.busy .ct em{display:block;font-style:normal;font-size:11px;font-weight:500;color:var(--muted)}
+
+.od-scroll{display:flex;overflow-x:auto;scrollbar-width:thin}
+.od{flex:1 0 auto;min-width:212px;padding:10px 14px;border-right:1px solid var(--line-2)}
+.od .rt{font-size:12.5px;font-weight:600}
+.od .rt em{font-style:normal;color:var(--faint);font-weight:400;padding:0 5px}
+.od .pc{font-size:17px;font-weight:700;color:var(--blue-dk);margin-top:2px}
+.od .sub{font-size:11.5px;color:var(--muted);margin-top:2px;line-height:1.4}
+
+/* ============================================================
+   ALERTS
+   ============================================================ */
+#view-alerts .body{grid-template-columns:378px minmax(0,1fr)}
+.alert-row{width:100%;text-align:left;padding:11px 14px;border-bottom:1px solid var(--line-2);
+  border-left:3px solid transparent}
+.alert-row:hover{background:var(--panel-3)}
+.alert-row[aria-current="true"]{background:var(--blue-wash);border-left-color:var(--blue)}
+.alert-row .ttl{font-size:13.5px;font-weight:600;margin:5px 0 2px}
+.alert-row[aria-current="true"] .ttl{color:var(--blue-dk)}
+.alert-row .sub{font-size:12px;color:var(--muted)}
+.sev{display:inline-block;padding:1px 7px;border-radius:2px;font-size:11px;font-weight:700}
+.sev.urgent{background:var(--red);color:#fff}
+.sev.check{background:var(--amber-wash);color:var(--amber);border:1px solid #E7D3AC}
+.sev.note{background:var(--blue-wash);color:var(--blue-dk);border:1px solid var(--blue-edge)}
+
+.detail{padding:18px 20px}
+.detail h2{font-family:'Fraunces',Georgia,serif;font-size:21px;font-weight:600;
+  letter-spacing:-.015em;margin:8px 0 10px}
+.detail .txt{font-size:13.5px;line-height:1.65;color:var(--ink-2);max-width:68ch}
+.facts{margin-top:16px;border-top:1px solid var(--line);max-width:68ch}
+.fact{display:grid;grid-template-columns:168px minmax(0,1fr);gap:14px;
+  padding:8px 0;border-bottom:1px solid var(--line-2);font-size:13px}
+.fact dt{color:var(--muted)}
+.fact dd{font-weight:500}
+.actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:18px}
+
+/* ============================================================
+   RECORDS
+   ============================================================ */
+#view-records .body{grid-template-rows:auto minmax(0,1fr)}
+.filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.table-scroll{flex:1;min-height:0;overflow:auto;scrollbar-width:thin}
+table{width:100%;border-collapse:collapse;min-width:900px}
+thead th{position:sticky;top:0;z-index:2;text-align:left;
+  font-size:11.5px;font-weight:600;color:var(--muted);padding:8px 14px;
+  background:var(--panel-2);border-bottom:1px solid var(--line);
+  border-right:1px solid var(--line-2);white-space:nowrap}
+thead th:last-child{border-right:none}
+tbody td{padding:8px 14px;font-size:13px;border-bottom:1px solid var(--line-2);
+  border-right:1px solid var(--line-2);vertical-align:middle}
+tbody td:last-child{border-right:none}
+tbody tr:nth-child(even) td{background:var(--panel-2)}
+tbody tr:hover td{background:var(--blue-wash)}
+td.t{color:var(--ink-2);white-space:nowrap}
+td .pl{font-weight:700;letter-spacing:.07em}
+td .pl.hot{color:var(--red-dk)}
+td small{display:block;font-size:11.5px;color:var(--muted)}
+.rdq{font-size:12.5px;font-weight:600}
+.rdq.good{color:var(--green)} .rdq.fair{color:var(--amber)} .rdq.poor{color:var(--red-dk)}
+
+/* ============================================================
+   MAP SVG
+   ============================================================ */
+.map-road{fill:none;stroke:var(--road);stroke-linecap:round;stroke-linejoin:round}
+.map-road-edge{fill:none;stroke:var(--road-edge);stroke-linecap:round;stroke-linejoin:round}
+.map-block{fill:#E9EDF3}
+.map-area{font-family:'Hanken Grotesk',sans-serif;font-size:11px;font-weight:600;
+  letter-spacing:.1em;fill:#A9B4C2}
+.map-node-label{font-family:'Hanken Grotesk',sans-serif;font-size:11.5px;font-weight:600;fill:var(--ink-2)}
+.map-road-label{font-family:'Hanken Grotesk',sans-serif;font-size:11px;font-weight:600;
+  letter-spacing:.05em;fill:var(--muted)}
+.map-node{fill:#FFFFFF;stroke:var(--muted);stroke-width:1.6}
+.map-route-halo{fill:none;stroke:var(--blue);stroke-opacity:.15;stroke-width:15;
+  stroke-linecap:round;stroke-linejoin:round}
+.map-route{fill:none;stroke:var(--blue);stroke-width:4;stroke-linecap:round;stroke-linejoin:round}
+.map-pin{fill:var(--blue);stroke:#fff;stroke-width:2}
+.map-pin.last{fill:var(--red)}
+.map-pin-text{font-family:'Hanken Grotesk',sans-serif;font-size:11px;font-weight:700;
+  fill:#fff;text-anchor:middle}
+.map-seg{fill:none;stroke-linecap:round;stroke-linejoin:round;stroke-width:7}
+.map-seg.free{stroke:var(--green)} .map-seg.slow{stroke:var(--amber)} .map-seg.heavy{stroke:var(--red)}
+
+.draw{stroke-dasharray:var(--len);stroke-dashoffset:var(--len);
+  animation:draw 1.1s cubic-bezier(.4,0,.2,1) forwards}
+@keyframes draw{to{stroke-dashoffset:0}}
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.001ms !important;transition-duration:.001ms !important}
+  .draw{stroke-dashoffset:0}
+}
+
+/* ============================================================
+   NARROW SCREENS — the page scrolls again below this width
+   ============================================================ */
+@media (max-width:1240px){
+  #view-cameras .body{grid-template-columns:230px minmax(0,1fr)}
+  #view-cameras .reads-panel{grid-column:1 / -1}
+}
+@media (max-width:980px){
+  body{overflow:auto;height:auto}
+  .shell{grid-template-columns:minmax(0,1fr);height:auto}
+  .rail{border-right:none;border-bottom:1px solid var(--line)}
+  .rail nav{display:flex;flex-wrap:wrap;padding:6px}
+  .rail nav button{width:auto;border-left:none;border:1px solid var(--line);margin:3px;border-radius:2px}
+  .rail nav button[aria-current="true"]{border-color:var(--blue)}
+  .nav-label{display:none}
+  .stage{height:auto;overflow:visible}
+  .view{overflow:visible}
+  .body{grid-template-columns:minmax(0,1fr) !important;overflow:visible}
+  .traffic-left,.traffic-right{grid-template-rows:none}
+  .map-hold{height:58vh}
+  .viewer{height:44vh}
+  .scroll{max-height:420px}
+  .table-scroll{max-height:60vh}
+}
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- ══════════════ RAIL ══════════════ -->
+  <aside class="rail">
+    <div class="rail-top">
+      <div class="mark">Veri<span>track</span></div>
+      <p class="mark-sub">Traffic Command Centre<br>Gurugram</p>
+    </div>
+
+    <nav id="nav" aria-label="Sections">
+      <p class="nav-label">Find a vehicle</p>
+      <button data-view="trace" aria-current="true">Trace a vehicle</button>
+      <button data-view="records">Sighting records</button>
+      <p class="nav-label">Watch the city</p>
+      <button data-view="cameras">Camera points</button>
+      <button data-view="traffic">City traffic</button>
+      <button data-view="alerts">Alerts <span class="pip">2</span></button>
+    </nav>
+
+    <div class="rail-foot">
+      <p class="who">Inspector R. Chauhan<small>Sector 29 police station</small></p>
+    </div>
+  </aside>
+
+  <!-- ══════════════ STAGE ══════════════ -->
+  <div class="stage">
+
+    <div class="strip">
+      <span class="cell"><i class="led"></i> <b>14</b> camera points working</span>
+      <span class="cell"><b>18,420</b> readings since midnight</span>
+      <span class="cell flag"><i class="led red"></i> <b>2</b> alerts need action</span>
+      <span class="cell">City average <b>34 km/h</b></span>
+      <span class="cell spacer"></span>
+      <span class="cell time"><b id="clock">10:14</b> <span id="date" style="color:var(--muted)">Sat 19 Sep</span></span>
+    </div>
+
+    <!-- ─────────── TRACE ─────────── -->
+    <section class="view on" id="view-trace">
+      <div class="head">
+        <h1 class="serif">Trace a vehicle</h1>
+        <p>Every camera point the vehicle passed, in order, with the time and the direction it was travelling.</p>
+      </div>
+
+      <div class="body">
+        <div class="trace-controls">
+          <div class="search">
+            <div class="field">
+              <label for="plate">Registration</label>
+              <input id="plate" value="HR 26 DK 8337" autocomplete="off" spellcheck="false" />
+            </div>
+            <button class="btn" id="go">Show journey</button>
+            <button class="btn ghost" id="clear">Clear</button>
+          </div>
+          <p class="hint">Searches are entered in the access register against your name.</p>
+        </div>
+
+        <div class="panel map-panel">
+          <div class="panel-head">
+            <h2 id="trace-title">Journey across the city</h2>
+            <span class="note" id="trace-window">9:12 am to 10:14 am today</span>
+          </div>
+          <div class="map-hold" id="trace-map"></div>
+          <div class="bar" id="trace-foot"></div>
+        </div>
+
+        <div class="panel side">
+          <div class="panel-head"><h2>Vehicle and stops</h2><span class="note" id="stop-count">7 stops</span></div>
+          <div id="trace-vehicle"></div>
+          <div class="scroll" id="trace-stops"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────── CAMERAS ─────────── -->
+    <section class="view" id="view-cameras">
+      <div class="head">
+        <h1 class="serif">Camera points</h1>
+        <p>Choose a camera point to see what it is reading now. Readings that need a second look are marked before they reach the register.</p>
+      </div>
+
+      <div class="body">
+        <div class="panel">
+          <div class="panel-head"><h2>Across the city</h2><span class="note">14 points</span></div>
+          <div class="scroll" id="cam-list"></div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <h2 id="cam-caption">Shankar Chowk</h2>
+            <span class="note" id="cam-dir">looking towards Delhi</span>
+          </div>
+          <div class="viewer" id="cam-view"></div>
+          <div class="bar" id="cam-bar"></div>
+        </div>
+
+        <div class="panel reads-panel">
+          <div class="panel-head"><h2>Just read here</h2><span class="note" id="cam-count">3 in the last minute</span></div>
+          <div class="scroll" id="cam-reads"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────── TRAFFIC ─────────── -->
+    <section class="view" id="view-traffic">
+      <div class="head">
+        <h1 class="serif">How the city is moving</h1>
+        <p>Speeds come from vehicles seen at two or more camera points in the last twenty minutes, so they describe real journeys rather than a single spot reading.</p>
+      </div>
+
+      <div class="body">
+        <div class="traffic-left">
+          <div class="panel">
+            <div class="panel-head"><h2>Main roads right now</h2><span class="note">Updated a moment ago</span></div>
+            <div class="map-hold" id="traffic-map"></div>
+            <div class="legend">
+              <span><i style="background:var(--green)"></i> Moving freely</span>
+              <span><i style="background:var(--amber)"></i> Slowing down</span>
+              <span><i style="background:var(--red)"></i> Heavy</span>
+              <span>Shaded circles mark where vehicles are backing up</span>
+            </div>
+          </div>
+
+          <div class="panel" style="flex:none">
+            <div class="panel-head"><h2>Where the traffic is going</h2><span class="note">Most common journeys this morning</span></div>
+            <div class="od-scroll" id="od-list"></div>
+          </div>
+        </div>
+
+        <div class="traffic-right">
+          <div class="panel">
+            <div class="panel-head"><h2>Road by road</h2><span class="note">Average speed</span></div>
+            <div class="scroll" id="road-list"></div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><h2>Busiest points</h2><span class="note">Vehicles an hour</span></div>
+            <div class="scroll" id="busy-list"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────── ALERTS ─────────── -->
+    <section class="view" id="view-alerts">
+      <div class="head">
+        <h1 class="serif">Alerts</h1>
+        <p>Vehicles on a watchlist, and journeys the cameras recorded that do not add up.</p>
+      </div>
+
+      <div class="body">
+        <div class="panel">
+          <div class="panel-head"><h2>Waiting for you</h2><span class="note">4 open</span></div>
+          <div class="scroll" id="alert-list"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h2 id="alert-head">Alert detail</h2><span class="note" id="alert-when"></span></div>
+          <div class="scroll" id="alert-detail"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────── RECORDS ─────────── -->
+    <section class="view" id="view-records">
+      <div class="head">
+        <h1 class="serif">Sighting records</h1>
+        <p>Every reading from every camera point, newest first. Search by registration number or by the name of a place.</p>
+      </div>
+
+      <div class="body">
+        <div class="filters">
+          <div class="field" style="flex:0 1 280px">
+            <label for="rec-search">Search</label>
+            <input id="rec-search" placeholder="Registration or place" autocomplete="off" style="font-weight:500;letter-spacing:.03em" />
+          </div>
+          <button class="chip" data-filter="all" aria-pressed="true">Everything</button>
+          <button class="chip" data-filter="flag" aria-pressed="false">On a watchlist</button>
+          <button class="chip" data-filter="check" aria-pressed="false">Needs a check</button>
+          <button class="btn ghost" style="margin-left:auto">Export for the case file</button>
+        </div>
+
+        <div class="panel">
+          <div class="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Time</th><th>Camera point</th><th>Road</th><th>Registration</th>
+                  <th>Vehicle</th><th>Travelling</th><th>Reading</th>
+                </tr>
+              </thead>
+              <tbody id="rec-body"></tbody>
+            </table>
+          </div>
+          <div class="bar">
+            <span id="rec-count"><b>28</b> readings shown</span>
+            <span>Readings are removed automatically after 30 days</span>
+            <span>Open only to officers assigned to the case</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   MAP GEOMETRY — schematic of the Gurugram camera network on a
+   tall canvas, so it fills a full-height column without
+   letterboxing the way a 16:9 tile map would.
+   ============================================================ */
+const NODES = {
+  kherki:   {n:'Kherki Daula Toll', x:88,  y:522, a:'middle', dx:-2, dy:22},
+  hero:     {n:'Hero Honda Chowk',  x:185, y:473, a:'middle', dx:0,  dy:23},
+  rajiv:    {n:'Rajiv Chowk',       x:278, y:427, a:'middle', dx:0,  dy:-14},
+  signature:{n:'Signature Tower',   x:366, y:379, a:'middle', dx:4,  dy:23},
+  iffco:    {n:'IFFCO Chowk',       x:445, y:335, a:'middle', dx:0,  dy:-14},
+  shankar:  {n:'Shankar Chowk',     x:524, y:292, a:'middle', dx:0,  dy:-14},
+  cyber:    {n:'Cyber City',        x:612, y:243, a:'middle', dx:0,  dy:-14},
+  mgmetro:  {n:'MG Road Metro',     x:500, y:379, a:'end',    dx:-13,dy:13},
+  sikander: {n:'Sikanderpur',       x:556, y:404, a:'start',  dx:13, dy:4},
+  sec43:    {n:'Sector 42 to 43',   x:582, y:473, a:'start',  dx:13, dy:4},
+  sec56:    {n:'Sector 55 to 56',   x:598, y:540, a:'start',  dx:13, dy:4},
+  subhash:  {n:'Subhash Chowk',     x:320, y:494, a:'end',    dx:-13,dy:4},
+  vatika:   {n:'Vatika Chowk',      x:366, y:549, a:'middle', dx:-8, dy:23},
+  huda:     {n:'Huda City Centre',  x:461, y:487, a:'end',    dx:-13,dy:4}
+};
+
+const ROADS = [
+  {pts:[[16,552],[88,522],[185,473],[278,427],[366,379],[445,335],[524,292],[612,243],[744,186]], w:13},
+  {pts:[[445,335],[500,379],[556,404]], w:9},
+  {pts:[[556,404],[582,473],[598,540],[604,600]], w:9},
+  {pts:[[278,427],[320,494],[366,549],[378,600]], w:8},
+  {pts:[[500,379],[475,434],[461,487],[454,552]], w:6},
+  {pts:[[88,522],[109,436],[139,344],[165,255],[178,162]], w:9},
+  {pts:[[366,549],[464,567],[547,560],[598,540]], w:7}
+];
+
+const BLOCKS = [[565,147,139,110],[215,170,122,96],[191,519,135,80],[406,427,85,73],[28,255,92,92]];
+const AREAS  = [{t:'Udyog Vihar',x:640,y:200},{t:'Palam Vihar',x:276,y:222},
+                {t:'South City',x:259,y:566},{t:'Sushant Lok',x:449,y:470},{t:'Manesar',x:74,y:304}];
+
+const line = p => p.map((q,i)=>(i?'L':'M')+q[0]+' '+q[1]).join(' ');
+const len  = p => p.reduce((s,q,i)=> i ? s+Math.hypot(q[0]-p[i-1][0], q[1]-p[i-1][1]) : 0, 0);
+
+function baseMap(){
+  let s = `<rect width="760" height="620" fill="var(--land)"/>`;
+  s += BLOCKS.map(b=>`<rect class="map-block" x="${b[0]}" y="${b[1]}" width="${b[2]}" height="${b[3]}"/>`).join('');
+  s += ROADS.map(r=>`<path class="map-road-edge" d="${line(r.pts)}" stroke-width="${r.w+5}"/>`).join('');
+  s += ROADS.map(r=>`<path class="map-road" d="${line(r.pts)}" stroke-width="${r.w}"/>`).join('');
+  s += AREAS.map(a=>`<text class="map-area" x="${a.x}" y="${a.y}" text-anchor="middle">${a.t}</text>`).join('');
+  s += `<text class="map-road-label" x="130" y="492" text-anchor="middle" transform="rotate(-28 130 492)">National Highway 48</text>`;
+  s += `<text class="map-road-label" x="112" y="348" text-anchor="middle" transform="rotate(-76 112 348)">Dwarka Expressway</text>`;
+  s += `<text class="map-road-label" x="690" y="218" text-anchor="middle" transform="rotate(-28 690 218)">towards Delhi</text>`;
+  s += `<text class="map-road-label" x="46" y="586" text-anchor="middle">towards Jaipur</text>`;
+  return s;
+}
+
+function nodeLayer(routeIds){
+  const on = new Set(routeIds||[]);
+  return Object.entries(NODES).map(([k,d])=>{
+    const c = on.has(k) ? '' : `<circle class="map-node" cx="${d.x}" cy="${d.y}" r="5"/>`;
+    return c + `<text class="map-node-label" x="${d.x+d.dx}" y="${d.y+d.dy}" text-anchor="${d.a}">${d.n}</text>`;
+  }).join('');
+}
+
+function traceMap(route){
+  const pts = route.map(s=>[NODES[s.at].x, NODES[s.at].y]);
+  const L = Math.round(len(pts));
+  let s = `<svg viewBox="0 0 760 620" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Map of the route this vehicle took across the city" xmlns="http://www.w3.org/2000/svg">`;
+  s += baseMap() + nodeLayer(route.map(r=>r.at));
+  if(pts.length>1){
+    s += `<path class="map-route-halo draw" style="--len:${L}" d="${line(pts)}"/>`;
+    s += `<path class="map-route draw" style="--len:${L}" d="${line(pts)}"/>`;
+  }
+  s += pts.map((p,i)=>{
+    const last = i===pts.length-1;
+    return `<g><circle class="map-pin${last?' last':''}" cx="${p[0]}" cy="${p[1]}" r="11.5"/>`+
+           `<text class="map-pin-text" x="${p[0]}" y="${p[1]+4}">${i+1}</text></g>`;
+  }).join('');
+  return s+`</svg>`;
+}
+
+const SEGMENTS = [
+  {p:[[88,522],[185,473]], s:'free'},
+  {p:[[185,473],[278,427]], s:'slow'},
+  {p:[[278,427],[366,379]], s:'heavy'},
+  {p:[[366,379],[445,335]], s:'heavy'},
+  {p:[[445,335],[524,292]], s:'slow'},
+  {p:[[524,292],[612,243]], s:'free'},
+  {p:[[445,335],[500,379],[556,404]], s:'slow'},
+  {p:[[556,404],[582,473],[598,540]], s:'free'},
+  {p:[[278,427],[320,494],[366,549]], s:'slow'},
+  {p:[[88,522],[109,436],[139,344],[165,255]], s:'free'},
+  {p:[[366,549],[464,567],[547,560],[598,540]], s:'free'},
+  {p:[[500,379],[475,434],[461,487]], s:'slow'}
+];
+const PRESSURE = [[278,427,58],[366,379,50],[445,335,44],[500,379,34]];
+
+function trafficMap(){
+  let s = `<svg viewBox="0 0 760 620" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Map showing how freely traffic is moving on each road" xmlns="http://www.w3.org/2000/svg">`;
+  s += `<defs><radialGradient id="press"><stop offset="0%" stop-color="#FF073A" stop-opacity=".26"/><stop offset="100%" stop-color="#FF073A" stop-opacity="0"/></radialGradient></defs>`;
+  s += baseMap();
+  s += PRESSURE.map(p=>`<circle cx="${p[0]}" cy="${p[1]}" r="${p[2]}" fill="url(#press)"/>`).join('');
+  s += SEGMENTS.map(g=>`<path class="map-seg ${g.s}" d="${line(g.p)}"/>`).join('');
+  s += nodeLayer([]);
+  return s+`</svg>`;
+}
+
+/* ============================================================
+   CAMERA VIEW
+   ============================================================ */
+function camView(reads){
+  const slots = [
+    {x:212,y:300,w:112,h:62,fill:'#D2D8DF'},
+    {x:392,y:250,w:96, h:54,fill:'#9BA6B2'},
+    {x:556,y:312,w:106,h:58,fill:'#454C56'}
+  ];
+  let s = `<svg viewBox="0 0 900 500" preserveAspectRatio="xMidYMid slice" role="img" aria-label="View from the camera showing lanes of traffic and the number plates that were read" xmlns="http://www.w3.org/2000/svg">`;
+  s += `<rect width="900" height="500" fill="#1B1F26"/>`;
+  s += `<path d="M120 500 L318 120 L602 120 L812 500 Z" fill="#272D36"/>`;
+  s += `<path d="M120 500 L318 120 L602 120 L812 500 Z" fill="none" stroke="#3A424E" stroke-width="2"/>`;
+  s += `<path d="M412 120 L300 500" stroke="#59616E" stroke-width="3" stroke-dasharray="24 30" fill="none"/>`;
+  s += `<path d="M508 120 L632 500" stroke="#59616E" stroke-width="3" stroke-dasharray="24 30" fill="none"/>`;
+  s += `<rect width="900" height="120" fill="#1B1F26"/>`;
+  ['Lane 1','Lane 2','Lane 3'].forEach((t,i)=>{
+    s += `<text x="${[40,420,790][i]}" y="58" fill="#8791A0" font-family="'Hanken Grotesk',sans-serif" font-size="14" font-weight="600">${t}</text>`;
+  });
+  slots.forEach((c,i)=>{
+    const r = reads[i]; if(!r) return;
+    s += `<rect x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}" rx="12" fill="${c.fill}"/>`;
+    s += `<rect x="${c.x+13}" y="${c.y+8}" width="${c.w-26}" height="${c.h*.4}" rx="6" fill="rgba(27,31,38,.25)"/>`;
+    const bx=c.x-12, by=c.y-14, bw=c.w+24, bh=c.h+28;
+    const stroke = r.q==='poor' ? '#FF073A' : '#0464FF';
+    s += `<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" fill="none" stroke="${stroke}" stroke-width="1.8"/>`;
+    s += `<rect x="${bx}" y="${by+bh+8}" width="${bw}" height="30" fill="#1B1F26" stroke="${stroke}" stroke-opacity=".6"/>`;
+    s += `<text x="${bx+bw/2}" y="${by+bh+29}" text-anchor="middle" fill="#E8EDF3" font-family="'Hanken Grotesk',sans-serif" font-size="15" font-weight="700" letter-spacing="1.4">${r.plate}</text>`;
+  });
+  return s+`</svg>`;
+}
+
+/* ============================================================
+   DATA
+   ============================================================ */
+const JOURNEYS = {
+  'HR26DK8337':{
+    plate:'HR 26 DK 8337', vehicle:'White sedan', where:'Registered in Gurugram',
+    flag:'The same number was read at Sector 55 to 56 ninety seconds after Rajiv Chowk. One of the two is carrying a copied plate.',
+    window:'9:12 am to 10:14 am today',
+    bar:['Seen at <b>7 camera points</b>','<b>18.4 km</b> covered','<b>1 h 02 m</b> on the road','Average <b>41 km/h</b>','Last read <b>3 minutes ago</b>'],
+    stops:[
+      {at:'kherki',   t:'9:12 am',  what:'Entered the city from the Jaipur side', sp:'62 km/h'},
+      {at:'hero',     t:'9:26 am',  what:'Carried straight on towards Delhi', sp:'38 km/h'},
+      {at:'rajiv',    t:'9:38 am',  what:'Held up on the approach to the flyover', sp:'24 km/h', slow:true},
+      {at:'signature',t:'9:51 am',  what:'Still heading towards Delhi', sp:'31 km/h'},
+      {at:'iffco',    t:'10:02 am', what:'Turned right onto MG Road', sp:'28 km/h'},
+      {at:'mgmetro',  t:'10:09 am', what:'Heading towards Sikanderpur', sp:'34 km/h'},
+      {at:'sikander', t:'10:14 am', what:'Last seen here, three minutes ago', sp:'30 km/h'}
+    ]
+  },
+  'UP16BT2290':{
+    plate:'UP 16 BT 2290', vehicle:'Black utility vehicle', where:'Registered in Noida',
+    flag:'On the watchlist for case 214 of 2025, Sector 29 police station.',
+    window:'8:40 am to 10:11 am today',
+    bar:['Seen at <b>4 camera points</b>','<b>12.1 km</b> covered','<b>1 h 31 m</b> on the road','Average <b>29 km/h</b>','Leaves the city in <b>8 minutes</b>'],
+    stops:[
+      {at:'kherki',  t:'8:40 am',  what:'Entered the city from the Jaipur side', sp:'58 km/h'},
+      {at:'rajiv',   t:'9:05 am',  what:'Waited on the service road before moving on', sp:'11 km/h', slow:true},
+      {at:'iffco',   t:'10:02 am', what:'Back on the highway towards Delhi', sp:'33 km/h'},
+      {at:'shankar', t:'10:11 am', what:'Last seen here, heading out of the city', sp:'44 km/h'}
+    ]
+  },
+  'DL8CAF4521':{
+    plate:'DL 8C AF 4521', vehicle:'Silver hatchback', where:'Registered in Delhi',
+    flag:'Left its expected route at Rajiv Chowk and has not been read since.',
+    window:'9:18 am to 9:31 am today',
+    bar:['Seen at <b>2 camera points</b>','<b>4.6 km</b> covered','<b>13 m</b> on the road','Average <b>21 km/h</b>','Missing for <b>40 minutes</b>'],
+    stops:[
+      {at:'hero',  t:'9:18 am', what:'Heading towards Delhi', sp:'36 km/h'},
+      {at:'rajiv', t:'9:31 am', what:'Last seen here, then not read again', sp:'19 km/h', slow:true}
+    ]
+  }
+};
+
+const CAMERAS = [
+  {id:'shankar',  n:'Shankar Chowk',     rd:'National Highway 48', dir:'looking towards Delhi',        lanes:3, hr:'1,880'},
+  {id:'iffco',    n:'IFFCO Chowk',       rd:'National Highway 48', dir:'looking towards Jaipur',       lanes:3, hr:'2,180'},
+  {id:'rajiv',    n:'Rajiv Chowk',       rd:'National Highway 48', dir:'looking towards Delhi',        lanes:3, hr:'2,410'},
+  {id:'kherki',   n:'Kherki Daula Toll', rd:'National Highway 48', dir:'looking at the toll lanes',    lanes:3, hr:'1,640'},
+  {id:'mgmetro',  n:'MG Road Metro',     rd:'MG Road',             dir:'looking towards Sikanderpur',  lanes:2, hr:'1,320'},
+  {id:'sikander', n:'Sikanderpur',       rd:'Golf Course Road',    dir:'looking towards Sector 56',    lanes:3, hr:'1,190'},
+  {id:'huda',     n:'Huda City Centre',  rd:'Sector Road',         dir:'looking towards Sohna Road',   lanes:2, hr:'880'},
+  {id:'subhash',  n:'Subhash Chowk',     rd:'Sohna Road',          dir:'looking towards Vatika Chowk', lanes:3, hr:'1,105'},
+  {id:'signature',n:'Signature Tower',   rd:'National Highway 48', dir:'looking towards Delhi',        lanes:3, hr:'1,940'},
+  {id:'cyber',    n:'Cyber City',        rd:'National Highway 48', dir:'looking out of the city',      lanes:3, hr:'1,510'},
+  {id:'hero',     n:'Hero Honda Chowk',  rd:'National Highway 48', dir:'looking towards Delhi',        lanes:3, hr:'1,720'},
+  {id:'sec43',    n:'Sector 42 to 43',   rd:'Golf Course Road',    dir:'looking towards Sector 56',    lanes:2, hr:'760'},
+  {id:'sec56',    n:'Sector 55 to 56',   rd:'Golf Course Road',    dir:'looking towards Sikanderpur',  lanes:2, hr:'690'},
+  {id:'vatika',   n:'Vatika Chowk',      rd:'Sohna Road',          dir:'looking towards Subhash Chowk',lanes:3, hr:'940'}
+];
+
+const READS = {
+  shankar:[{plate:'HR 26 DK 8337',v:'White sedan',lane:'Lane 1',t:'10:14 am',q:'good',hot:true},
+           {plate:'DL 3C BJ 6120',v:'Silver hatchback',lane:'Lane 2',t:'10:14 am',q:'good'},
+           {plate:'HR 51 AN 7743',v:'Goods vehicle',lane:'Lane 3',t:'10:13 am',q:'fair'}],
+  iffco:  [{plate:'UP 16 BT 2290',v:'Black utility vehicle',lane:'Lane 2',t:'10:14 am',q:'good',hot:true},
+           {plate:'HR 26 CX 9012',v:'White van',lane:'Lane 1',t:'10:13 am',q:'good'},
+           {plate:'RJ 14 QC 1188',v:'Blue hatchback',lane:'Lane 3',t:'10:13 am',q:'poor'}],
+  rajiv:  [{plate:'DL 8C AF 4521',v:'Silver hatchback',lane:'Lane 1',t:'10:14 am',q:'good',hot:true},
+           {plate:'HR 26 AT 4409',v:'Grey sedan',lane:'Lane 2',t:'10:14 am',q:'fair'},
+           {plate:'HR 55 T 8820',v:'Goods vehicle',lane:'Lane 3',t:'10:12 am',q:'good'}],
+  kherki: [{plate:'RJ 14 GB 3391',v:'White sedan',lane:'Lane 1',t:'10:14 am',q:'good'},
+           {plate:'HR 26 DQ 1157',v:'Black sedan',lane:'Lane 2',t:'10:13 am',q:'good'},
+           {plate:'UP 14 CT 7705',v:'Bus',lane:'Lane 3',t:'10:12 am',q:'fair'}],
+  mgmetro:[{plate:'HR 26 DK 8337',v:'White sedan',lane:'Lane 1',t:'10:09 am',q:'good',hot:true},
+           {plate:'DL 4C AM 2214',v:'Blue hatchback',lane:'Lane 2',t:'10:09 am',q:'good'}],
+  sikander:[{plate:'HR 26 BR 5578',v:'Grey utility vehicle',lane:'Lane 1',t:'10:14 am',q:'good'},
+           {plate:'HR 26 DK 8337',v:'White sedan',lane:'Lane 2',t:'10:14 am',q:'good',hot:true},
+           {plate:'DL 1C AA 4410',v:'Auto rickshaw',lane:'Lane 3',t:'10:12 am',q:'fair'}],
+  huda:   [{plate:'HR 26 EK 2231',v:'White hatchback',lane:'Lane 1',t:'10:13 am',q:'good'},
+           {plate:'HR 26 AB 9066',v:'Two wheeler',lane:'Lane 2',t:'10:12 am',q:'poor'}],
+  subhash:[{plate:'HR 51 AN 7743',v:'Goods vehicle',lane:'Lane 1',t:'10:14 am',q:'good',hot:true},
+           {plate:'HR 26 CF 3340',v:'Grey sedan',lane:'Lane 2',t:'10:13 am',q:'good'},
+           {plate:'RJ 02 PB 7719',v:'Goods vehicle',lane:'Lane 3',t:'10:11 am',q:'fair'}],
+  signature:[{plate:'HR 26 AT 4409',v:'Grey sedan',lane:'Lane 1',t:'10:14 am',q:'fair'},
+           {plate:'HR 26 DD 1204',v:'White sedan',lane:'Lane 2',t:'10:13 am',q:'good'},
+           {plate:'DL 2C AK 5590',v:'Black sedan',lane:'Lane 3',t:'10:12 am',q:'good'}],
+  cyber:  [{plate:'DL 3C BJ 6120',v:'Silver hatchback',lane:'Lane 1',t:'10:14 am',q:'good'},
+           {plate:'HR 26 FG 7781',v:'White van',lane:'Lane 2',t:'10:13 am',q:'good'}],
+  hero:   [{plate:'UP 14 CT 7705',v:'Bus',lane:'Lane 1',t:'10:14 am',q:'fair'},
+           {plate:'HR 26 CC 3318',v:'Grey hatchback',lane:'Lane 2',t:'10:13 am',q:'good'},
+           {plate:'HR 38 W 2204',v:'Goods vehicle',lane:'Lane 3',t:'10:12 am',q:'poor'}],
+  sec43:  [{plate:'HR 26 BB 1190',v:'Black sedan',lane:'Lane 1',t:'10:13 am',q:'good'},
+           {plate:'HR 26 AE 9902',v:'Two wheeler',lane:'Lane 2',t:'10:12 am',q:'fair'}],
+  sec56:  [{plate:'HR 26 DK 8337',v:'Silver hatchback',lane:'Lane 1',t:'10:05 am',q:'fair',hot:true},
+           {plate:'HR 26 GH 4417',v:'White sedan',lane:'Lane 2',t:'10:12 am',q:'good'}],
+  vatika: [{plate:'HR 26 DL 4412',v:'White sedan',lane:'Lane 1',t:'10:13 am',q:'good'},
+           {plate:'RJ 02 PB 7719',v:'Goods vehicle',lane:'Lane 2',t:'10:12 am',q:'fair'},
+           {plate:'HR 26 JK 2298',v:'Grey hatchback',lane:'Lane 3',t:'10:11 am',q:'good'}]
+};
+
+const QWORD = {good:'Clear read', fair:'Good enough', poor:'Needs a check'};
+
+const ROADSTATE = [
+  {n:'Highway 48, Rajiv Chowk to IFFCO Chowk',     s:'heavy', now:19, usual:60},
+  {n:'MG Road, IFFCO Chowk to Sikanderpur',        s:'slow',  now:28, usual:45},
+  {n:'Sohna Road, Rajiv Chowk to Vatika Chowk',    s:'slow',  now:31, usual:50},
+  {n:'Sector Road, MG Road to Huda City Centre',   s:'slow',  now:26, usual:40},
+  {n:'Golf Course Road, Sikanderpur to Sector 56', s:'free',  now:48, usual:55},
+  {n:'Dwarka Expressway, Kherki Daula onwards',    s:'free',  now:71, usual:80},
+  {n:'Peripheral Road, Vatika to Sector 56',       s:'free',  now:52, usual:60},
+  {n:'Highway 48, Shankar Chowk to Cyber City',    s:'free',  now:57, usual:65}
+];
+
+const BUSY = [
+  {n:'Rajiv Chowk',      rd:'National Highway 48', c:'2,410', d:'up 18%'},
+  {n:'IFFCO Chowk',      rd:'National Highway 48', c:'2,180', d:'up 9%'},
+  {n:'Signature Tower',  rd:'National Highway 48', c:'1,940', d:'steady'},
+  {n:'Shankar Chowk',    rd:'National Highway 48', c:'1,880', d:'steady'},
+  {n:'Hero Honda Chowk', rd:'National Highway 48', c:'1,720', d:'down 4%'},
+  {n:'MG Road Metro',    rd:'MG Road',             c:'1,320', d:'up 6%'},
+  {n:'Subhash Chowk',    rd:'Sohna Road',          c:'1,105', d:'steady'}
+];
+
+const OD = [
+  {a:'Kherki Daula Toll',b:'Cyber City',pc:'18%',sub:'Mostly 8 am to 10 am, about 31 minutes end to end'},
+  {a:'Sohna Road',b:'Cyber City',pc:'14%',sub:'Slowest stretch is the approach to Rajiv Chowk'},
+  {a:'Dwarka Expressway',b:'Golf Course Road',pc:'11%',sub:'Steady all morning, no hold-ups recorded'},
+  {a:'Sector 55 to 56',b:'IFFCO Chowk',pc:'9%',sub:'Peaks sharply between 9 am and 9:30 am'},
+  {a:'Vatika Chowk',b:'MG Road Metro',pc:'7%',sub:'Builds after 9:30 am, clears by 11 am'}
+];
+
+const ALERTS = [
+  {id:'clone',sev:'urgent',sevw:'Act now',when:'Raised 9:39 am',
+   ttl:'Same number plate read in two places at once',sub:'HR 26 DK 8337, first seen 9:38 am',plate:'HR 26 DK 8337',
+   body:'This registration was read at Rajiv Chowk at 9:38 am and again at Sector 55 to 56 ninety seconds later. The two points are 18 kilometres apart, so no vehicle could have made that journey. One of the two is almost certainly carrying a copied plate.<br><br>The white sedan at Rajiv Chowk matches the vehicle on record for this number. The one read at Sector 55 to 56 was a silver hatchback, which does not match.',
+   facts:[['Registration','HR 26 DK 8337'],['On record as','White sedan, registered in Gurugram'],
+          ['First reading','Rajiv Chowk, 9:38 am, white sedan'],['Second reading','Sector 55 to 56, 9:39 am, silver hatchback'],
+          ['Distance apart','18.2 kilometres'],['Time between','90 seconds'],['Raised','9:39 am, automatically']]},
+  {id:'watch',sev:'urgent',sevw:'Act now',when:'Seen 10:11 am',
+   ttl:'Watchlist vehicle on the highway',sub:'UP 16 BT 2290, seen 10:02 am',plate:'UP 16 BT 2290',
+   body:'This vehicle is on the watchlist for case 214 of 2025, registered at Sector 29 police station. It was read at IFFCO Chowk at 10:02 am heading towards Delhi, and again at Shankar Chowk at 10:11 am.<br><br>At its current speed it will leave the city boundary in about eight minutes. The next camera point on its route is Cyber City.',
+   facts:[['Registration','UP 16 BT 2290'],['On record as','Black utility vehicle, registered in Noida'],
+          ['Listed for','Case 214 of 2025, Sector 29 police station'],['Last seen','Shankar Chowk, 10:11 am'],
+          ['Heading','Towards Delhi on National Highway 48'],['Next camera point','Cyber City, in about 4 minutes']]},
+  {id:'lost',sev:'check',sevw:'Worth a look',when:'Raised 9:51 am',
+   ttl:'Vehicle left its route and was not seen again',sub:'DL 8C AF 4521, last seen 9:31 am',plate:'DL 8C AF 4521',
+   body:'This vehicle was travelling towards Delhi and should have passed Signature Tower within eight minutes of Rajiv Chowk. It has not been read at any camera point for forty minutes.<br><br>This usually means the vehicle stopped, turned into a colony road with no camera, or the plate is no longer readable. Check the last picture before treating it as suspicious.',
+   facts:[['Registration','DL 8C AF 4521'],['On record as','Silver hatchback, registered in Delhi'],
+          ['Last seen','Rajiv Chowk, 9:31 am'],['Expected at','Signature Tower by 9:39 am'],
+          ['Missing for','40 minutes'],['Raised','9:51 am, automatically']]},
+  {id:'goods',sev:'note',sevw:'For the record',when:'Raised 9:40 am',
+   ttl:'Goods vehicle on a road closed to it',sub:'HR 51 AN 7743, seen 9:40 am',plate:'HR 51 AN 7743',
+   body:'Goods vehicles are not allowed on MG Road between 8 am and 11 am. This one was read at MG Road Metro at 9:40 am travelling towards Sikanderpur.<br><br>The reading is clear and the vehicle type matches the record, so this can go straight to the enforcement team.',
+   facts:[['Registration','HR 51 AN 7743'],['On record as','Goods vehicle, registered in Faridabad'],
+          ['Seen at','MG Road Metro, 9:40 am'],['Restriction','No goods vehicles, 8 am to 11 am'],
+          ['Reading','Clear'],['Raised','9:40 am, automatically']]}
+];
+
+const RECORDS = [
+  ['10:14 am','Shankar Chowk','National Highway 48','HR 26 DK 8337','White sedan','Towards Delhi','good',true],
+  ['10:14 am','Sikanderpur','Golf Course Road','HR 26 BR 5578','Grey utility vehicle','Towards Sector 56','good',false],
+  ['10:14 am','Rajiv Chowk','National Highway 48','DL 8C AF 4521','Silver hatchback','Towards Delhi','good',true],
+  ['10:14 am','Kherki Daula Toll','National Highway 48','RJ 14 GB 3391','White sedan','Into the city','good',false],
+  ['10:13 am','IFFCO Chowk','National Highway 48','RJ 14 QC 1188','Blue hatchback','Towards Jaipur','poor',false],
+  ['10:13 am','Shankar Chowk','National Highway 48','HR 51 AN 7743','Goods vehicle','Towards Delhi','fair',true],
+  ['10:13 am','Huda City Centre','Sector Road','HR 26 EK 2231','White hatchback','Towards Sohna Road','good',false],
+  ['10:13 am','Kherki Daula Toll','National Highway 48','HR 26 DQ 1157','Black sedan','Into the city','good',false],
+  ['10:12 am','Subhash Chowk','Sohna Road','HR 26 CF 3340','Grey sedan','Towards Vatika Chowk','good',false],
+  ['10:12 am','Sikanderpur','Golf Course Road','DL 1C AA 4410','Auto rickshaw','Towards Sector 56','fair',false],
+  ['10:12 am','Huda City Centre','Sector Road','HR 26 AB 9066','Two wheeler','Towards Sohna Road','poor',false],
+  ['10:12 am','Rajiv Chowk','National Highway 48','HR 55 T 8820','Goods vehicle','Towards Delhi','good',false],
+  ['10:12 am','Sector 55 to 56','Golf Course Road','HR 26 GH 4417','White sedan','Towards Sikanderpur','good',false],
+  ['10:11 am','Shankar Chowk','National Highway 48','UP 16 BT 2290','Black utility vehicle','Towards Delhi','good',true],
+  ['10:11 am','Subhash Chowk','Sohna Road','RJ 02 PB 7719','Goods vehicle','Towards Vatika Chowk','fair',false],
+  ['10:11 am','Vatika Chowk','Sohna Road','HR 26 JK 2298','Grey hatchback','Towards Subhash Chowk','good',false],
+  ['10:10 am','IFFCO Chowk','National Highway 48','HR 26 CX 9012','White van','Towards Jaipur','good',false],
+  ['10:09 am','MG Road Metro','MG Road','HR 26 DK 8337','White sedan','Towards Sikanderpur','good',true],
+  ['10:09 am','MG Road Metro','MG Road','DL 4C AM 2214','Blue hatchback','Towards Sikanderpur','good',false],
+  ['10:08 am','Signature Tower','National Highway 48','HR 26 AT 4409','Grey sedan','Towards Delhi','fair',false],
+  ['10:07 am','Cyber City','National Highway 48','DL 3C BJ 6120','Silver hatchback','Out of the city','good',false],
+  ['10:06 am','Vatika Chowk','Sohna Road','HR 26 DL 4412','White sedan','Towards Subhash Chowk','good',false],
+  ['10:05 am','Sector 55 to 56','Golf Course Road','HR 26 DK 8337','Silver hatchback','Towards Sikanderpur','fair',true],
+  ['10:04 am','Hero Honda Chowk','National Highway 48','UP 14 CT 7705','Bus','Towards Delhi','fair',false],
+  ['10:04 am','Hero Honda Chowk','National Highway 48','HR 38 W 2204','Goods vehicle','Towards Delhi','poor',false],
+  ['10:03 am','Sector 42 to 43','Golf Course Road','HR 26 BB 1190','Black sedan','Towards Sector 56','good',false],
+  ['10:02 am','IFFCO Chowk','National Highway 48','UP 16 BT 2290','Black utility vehicle','Towards Delhi','good',true],
+  ['10:01 am','Signature Tower','National Highway 48','DL 2C AK 5590','Black sedan','Towards Delhi','good',false]
+];
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+const $ = s => document.querySelector(s);
+
+/* — trace — */
+function renderTrace(key){
+  const j = JOURNEYS[key];
+
+  if(!j){
+    $('#trace-map').innerHTML = traceMap([]);
+    $('#trace-foot').innerHTML = '<span>No journey to show</span>';
+    $('#trace-title').textContent = 'Journey across the city';
+    $('#trace-window').textContent = 'Last 30 days searched';
+    $('#stop-count').textContent = 'No stops';
+    $('#trace-vehicle').innerHTML = '';
+    $('#trace-stops').innerHTML =
+      `<div class="empty"><h3 class="serif">No sightings for that number</h3>
+       <p>Nothing was read at any camera point in the last 30 days. Check the number, or try HR 26 DK 8337.</p></div>`;
+    return;
+  }
+
+  $('#trace-map').innerHTML = traceMap(j.stops);
+  $('#trace-title').textContent = 'Journey of ' + j.plate;
+  $('#trace-window').textContent = j.window;
+  $('#stop-count').textContent = j.stops.length + ' stops';
+  $('#trace-foot').innerHTML = j.bar.map(b=>`<span>${b}</span>`).join('');
+
+  $('#trace-vehicle').innerHTML = `
+    <div class="vhead">
+      <span class="plate">${j.plate}</span>
+      <p class="vmeta">${j.vehicle} &nbsp;&middot;&nbsp; <em>${j.where}</em></p>
+      ${j.flag ? `<p class="flagline">${j.flag}</p>` : ''}
+    </div>`;
+
+  $('#trace-stops').innerHTML = j.stops.map((s,i)=>`
+    <div class="stop">
+      <span class="stop-n">${i+1}</span>
+      <span class="stop-where">${NODES[s.at].n}</span>
+      <span class="stop-time">${s.t}</span>
+      <span class="stop-what">${s.what}</span>
+      <span class="stop-speed${s.slow?' slow':''}">Passing at <b>${s.sp}</b></span>
+    </div>`).join('');
+  $('#trace-stops').scrollTop = 0;
+}
+function search(){ renderTrace(($('#plate').value||'').replace(/[^A-Za-z0-9]/g,'').toUpperCase()); }
+$('#go').addEventListener('click', search);
+$('#clear').addEventListener('click', ()=>{ $('#plate').value=''; $('#plate').focus(); renderTrace(''); });
+$('#plate').addEventListener('keydown', e=>{ if(e.key==='Enter') search(); });
+
+/* — cameras — */
+function renderCameras(id){
+  $('#cam-list').innerHTML = CAMERAS.map(c=>`
+    <button class="cam-row" data-cam="${c.id}" aria-current="${c.id===id}">
+      <span><span class="nm">${c.n}</span><span class="rd">${c.rd}</span></span>
+      <span class="cnt">${c.hr}/hr</span>
+    </button>`).join('');
+
+  const cam = CAMERAS.find(c=>c.id===id);
+  const reads = READS[id] || [];
+  $('#cam-view').innerHTML = camView(reads);
+  $('#cam-caption').textContent = cam.n;
+  $('#cam-dir').textContent = cam.dir;
+  $('#cam-count').textContent = reads.length + ' in the last minute';
+  $('#cam-bar').innerHTML =
+    `<span>Reading <b>${cam.lanes} lanes</b></span><span><b>${cam.hr}</b> vehicles an hour</span>` +
+    `<span>${cam.rd}</span><span>Recording since <b>6:00 am</b></span>`;
+
+  $('#cam-reads').innerHTML = reads.map(r=>`
+    <div class="read">
+      <span class="p${r.hot?' hot':''}">${r.plate}</span>
+      <span class="q ${r.q}"><span>${QWORD[r.q]}</span>
+        <span class="bars ${r.q}"><i></i><i></i><i></i></span></span>
+      <span class="d">${r.v}</span>
+      <span class="m">${r.lane}, read at ${r.t}${r.hot?', on an alert':''}</span>
+    </div>`).join('');
+  $('#cam-reads').scrollTop = 0;
+
+  $('#cam-list').querySelectorAll('[data-cam]').forEach(b=>
+    b.addEventListener('click',()=>renderCameras(b.dataset.cam)));
+}
+
+/* — traffic — */
+function renderTraffic(){
+  $('#traffic-map').innerHTML = trafficMap();
+
+  $('#road-list').innerHTML = ROADSTATE.map(r=>{
+    const word = r.s==='free'?'Moving freely':r.s==='slow'?'Slowing down':'Heavy';
+    return `<div class="road-row">
+      <div class="top"><span class="nm">${r.n}</span><span class="st ${r.s}">${word}</span></div>
+      <div class="track"><i class="${r.s}" style="width:${Math.round(r.now/r.usual*100)}%"></i></div>
+      <div class="sp"><b>${r.now} km/h</b> now, usually ${r.usual} km/h at this hour</div>
+    </div>`;
+  }).join('');
+
+  $('#busy-list').innerHTML = BUSY.map((b,i)=>`
+    <div class="busy">
+      <span class="rank">${i+1}</span>
+      <span class="nm">${b.n}<small>${b.rd}</small></span>
+      <span class="ct">${b.c}<em>${b.d}</em></span>
+    </div>`).join('');
+
+  $('#od-list').innerHTML = OD.map(o=>`
+    <div class="od">
+      <div class="rt">${o.a}<em>to</em>${o.b}</div>
+      <div class="pc">${o.pc}</div>
+      <div class="sub">${o.sub}</div>
+    </div>`).join('');
+}
+
+/* — alerts — */
+function renderAlerts(id){
+  $('#alert-list').innerHTML = ALERTS.map(a=>`
+    <button class="alert-row" data-alert="${a.id}" aria-current="${a.id===id}">
+      <span class="sev ${a.sev}">${a.sevw}</span>
+      <div class="ttl">${a.ttl}</div>
+      <div class="sub">${a.sub}</div>
+    </button>`).join('');
+
+  const a = ALERTS.find(x=>x.id===id);
+  $('#alert-head').textContent = a.ttl;
+  $('#alert-when').textContent = a.when;
+  $('#alert-detail').innerHTML = `
+    <div class="detail">
+      <span class="sev ${a.sev}">${a.sevw}</span>
+      <h2>${a.ttl}</h2>
+      <p class="txt">${a.body}</p>
+      <dl class="facts">${a.facts.map(f=>`<div class="fact"><dt>${f[0]}</dt><dd>${f[1]}</dd></div>`).join('')}</dl>
+      <div class="actions">
+        <button class="btn${a.sev==='urgent'?' danger':''}">Send to the control room</button>
+        <button class="btn ghost" data-open="${a.plate}">Open the journey</button>
+        <button class="btn ghost">Mark as checked</button>
+      </div>
+    </div>`;
+  $('#alert-detail').scrollTop = 0;
+
+  $('#alert-list').querySelectorAll('[data-alert]').forEach(b=>
+    b.addEventListener('click',()=>renderAlerts(b.dataset.alert)));
+  const o = $('#alert-detail').querySelector('[data-open]');
+  if(o) o.addEventListener('click',()=>{ $('#plate').value=o.dataset.open; show('trace'); search(); });
+}
+
+/* — records — */
+let recFilter='all';
+function renderRecords(){
+  const q = ($('#rec-search').value||'').replace(/\s+/g,' ').trim().toLowerCase();
+  const rows = RECORDS.filter(r=>{
+    if(recFilter==='flag' && !r[7]) return false;
+    if(recFilter==='check' && r[6]==='good') return false;
+    if(!q) return true;
+    return (r[3]+' '+r[1]+' '+r[2]+' '+r[4]).toLowerCase().includes(q);
+  });
+
+  $('#rec-body').innerHTML = rows.length ? rows.map(r=>`
+    <tr>
+      <td class="t">${r[0]}</td>
+      <td>${r[1]}</td>
+      <td class="t">${r[2]}</td>
+      <td><span class="pl${r[7]?' hot':''}">${r[3]}</span>${r[7]?'<small>On a watchlist</small>':''}</td>
+      <td class="t">${r[4]}</td>
+      <td class="t">${r[5]}</td>
+      <td><span class="rdq ${r[6]}">${QWORD[r[6]]}</span></td>
+    </tr>`).join('')
+    : `<tr><td colspan="7"><div class="empty"><h3 class="serif">Nothing matches that</h3>
+       <p>Try a shorter search, such as the last four digits or the name of a junction.</p></div></td></tr>`;
+
+  $('#rec-count').innerHTML = rows.length===RECORDS.length
+    ? `<b>${rows.length}</b> readings shown`
+    : `<b>${rows.length}</b> of ${RECORDS.length} readings shown`;
+}
+$('#rec-search').addEventListener('input', renderRecords);
+document.querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>{
+  recFilter=c.dataset.filter;
+  document.querySelectorAll('.chip').forEach(o=>o.setAttribute('aria-pressed',String(o===c)));
+  renderRecords();
+}));
+
+/* — navigation — */
+function show(v){
+  document.querySelectorAll('.view').forEach(s=>s.classList.toggle('on', s.id==='view-'+v));
+  document.querySelectorAll('#nav button').forEach(b=>b.setAttribute('aria-current',String(b.dataset.view===v)));
+}
+document.querySelectorAll('#nav button').forEach(b=>b.addEventListener('click',()=>show(b.dataset.view)));
+
+/* — clock — */
+function tick(){
+  const n = new Date();
+  $('#clock').textContent = new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',hour:'2-digit',minute:'2-digit',hour12:false}).format(n);
+  $('#date').textContent = new Intl.DateTimeFormat('en-IN',{timeZone:'Asia/Kolkata',weekday:'short',day:'numeric',month:'short'}).format(n);
+}
+tick(); setInterval(tick, 20000);
+
+/* — first paint — */
+renderTrace('HR26DK8337');
+renderCameras('shankar');
+renderTraffic();
+renderAlerts('clone');
+renderRecords();
+</script>
+</body>
+</html>

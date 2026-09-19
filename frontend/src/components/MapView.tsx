@@ -1,7 +1,7 @@
 import L from "leaflet";
 import { useEffect, useRef } from "react";
 import type { CorridorMetric, Trajectory } from "../types/telemetry";
-
+import "leaflet/dist/leaflet.css";
 const cameras = [["Shankar Chowk", "GMDA-ANPR-SEC29-01", 28.5003, 77.0870], ["IFFCO Chowk", "GMDA-CAM-IFFCO-01", 28.4735, 77.0725], ["MG Road Metro", "GMDA-CAM-MGR-02", 28.4797, 77.0802], ["Sikanderpur", "GMDA-CAM-SIK-03", 28.4810, 77.0921], ["Genpact", "GMDA-CAM-GEN-01", 28.4932, 77.0925], ["Sector 54", "GMDA-CAM-GCR-04", 28.4430, 77.0865], ["Cyber City", "DLF-PHASE3-ENTRY-02", 28.4941, 77.0885], ["DLF Phase 3", "GMDA-CAM-CC-02", 28.4958, 77.0912]] as const;
 const links = [[0, 1, "MG Road"], [3, 5, "Golf Course Road"], [4, 6, "Cyber City Underpass"]] as const;
 const color = (metric?: CorridorMetric) => metric?.level === "CRITICAL_CONGESTION" ? "#dc2626" : metric?.level === "ADAPTIVE_SIGNAL" ? "#d97706" : "#16a34a";
